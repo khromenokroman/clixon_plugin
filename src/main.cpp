@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <stack>
+#include <vector>
 
 #include "logger.hpp"
 
@@ -12,13 +13,12 @@
 
 static clixon_plugin_api api;
 
-
-int plugin_start([[maybe_unused]]clixon_handle h) {
+int plugin_start([[maybe_unused]] clixon_handle h) {
     clicon_log(LOG_DEBUG, "[%s]: Start plugin", NAME);
     return 0;
 }
 
-static int plugin_exit([[maybe_unused]]clixon_handle h) {
+static int plugin_exit([[maybe_unused]] clixon_handle h) {
     clicon_log(LOG_DEBUG, "[%s]: Close plugin", NAME);
     return 0;
 }
@@ -37,37 +37,33 @@ int commit_done([[maybe_unused]] clicon_handle h, transaction_data td) {
 
     if (change_count != 0) {
         for (size_t i = 0; i < change_count; ++i) {
-            std::stack<std::string> pr_node_begin;
-            std::stack<std::string> pr_node_end;
+            std::vector<std::string> parents;
+            parents.reserve(100);
             cxobj *added = added_data[i];
             cxobj *parent_node = xml_parent(added);
-            pr_node_begin.push(std::string(xml_name(parent_node)));
+            parents.emplace_back(xml_name(parent_node));
             while (parent_node) {
                 parent_node = xml_parent(parent_node);
-                if (parent_node) pr_node_begin.push(std::string(xml_name(parent_node)));
+                if (parent_node) {
+                    parents.emplace_back(xml_name(parent_node));
+                }
             }
             clicon_log(LOG_WARNING, "[%s]: parent node OK", NAME);
-            pr_node_end = pr_node_begin;
-            clicon_log(LOG_WARNING, "[%s]: copy OK", NAME);
-            //            clicon_log(LOG_WARNING, "[%s]: Parent name of added change %zu: %s", NAME, i, parent_name);
             auto source_buffer = cbuf_new();
             if (source_buffer == nullptr) {
             } else {
                 if (clixon_xml2cbuf(source_buffer, added, 0, 0, (char *)"", -1, 0) != -1) {
-                    //                    clicon_log(LOG_WARNING, "[%s]: added change %zu:\n%s", NAME, i,
-                    //                    cbuf_get(source_buffer));
+                    // error ...
                 }
                 std::string data = cbuf_get(source_buffer);
                 std::string front_node{};
                 std::string back_node{};
-                while (!pr_node_begin.empty()) {
-                    front_node += ("<" + pr_node_begin.top() + ">");
-                    pr_node_begin.pop();
+                for(auto it = parents.rbegin();it != parents.rend(); it++){
+                    front_node += ("<" + (*it) + ">");
                 }
                 clicon_log(LOG_WARNING, "[%s]: pr_node_begin OK", NAME);
-                while (!pr_node_end.empty()) {
-                    back_node += ("</" + pr_node_end.top() + ">");
-                    pr_node_end.pop();
+                for(auto & parent : parents){
+                    back_node += ("</" + parent + ">");
                 }
                 clicon_log(LOG_WARNING, "[%s]: pr_node_end OK", NAME);
                 std::string res{};
